@@ -1,2 +1,1 @@
-# hello-world
-First git-hub repository
+Experimental Controller that combines CLF/CBFs with Null Space Control for the Baxter Robot
