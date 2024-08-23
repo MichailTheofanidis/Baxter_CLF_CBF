@@ -35,9 +35,8 @@ right.links(6).I=[0.0070053791,  0.0001534806,  -0.0004438478;  0.0001534806, 0.
 right.links(7).I=[0.0008162135,  0.000128440,  0.00018969891;  0.000128440, 0.0008735012,  0.0001057726;  0.00018969891, 0.0001057726, 0.0005494148];
 
 %% Load the data
-%date = '2_15_23';
-date = "5_3_23\Set_2";
-gifFile = 'cartesian.gif';
+date = '5_3_23';
+%date = "5_3_23\Set_2";
 
 field1 = 'x';  value1 = importdata(append("Data\",date,"\cartesian_data\baxter_promp_joint_0.txt"));
 field2 = 'y';  value2 = importdata(append("Data\",date,"\cartesian_data\baxter_promp_joint_1.txt"));
@@ -88,16 +87,16 @@ end
 %% Use IK to start to find the starting point of the robot
 
 % Initialize IK
-%initialGuess = [0.1153, -0.3524, 0.0304, 1.0884, -0.0384, 0.7413, 0];
-initialGuess = [-0.1211, -0.2183, -0.1103, 0.6284, 0.1840, 0.9434, -0.5923]; % Initial Guess for Set 2
+initialGuess = [0.1153, -0.3524, 0.0304, 1.0884, -0.0384, 0.7413, 0]; %All other sets
+%initialGuess = [-0.1211, -0.2183, -0.1103, 0.6284, 0.1840, 0.9434, -0.5923]; % Guess for Set 2
 baxterOrientation = axang2rotm([0 1 0 pi]);
 
 % Fix the orientation of the end effector
 [~,rot_target]=tr2angvec(baxterOrientation);
 pose = [baxterOrientation [data.x(1,1) data.y(1,1) data.z(1,1)]'; 0 0 0 1];
 
-%q_init=right.ikine(pose,initialGuess); % initial joint position of the robot
-q_init=initialGuess;
+q_init=right.ikine(pose,initialGuess); % initial joint position for possible IK
+%q_init=initialGuess;
 x_init=transl(right.fkine(q_init)); % initial cartesian position of the robot
 
 %% Make the Baxter Robot follow mean the trajectory
@@ -119,7 +118,6 @@ x_init=transl(right.fkine(q_init)); % initial cartesian position of the robot
 % right.plot(q_init)
 
 % Iterate through all joint configurations and end-effectort positions
-
 % vizStep = 1;
 % for i = 2:vizStep:length(q_mean)
 %     %right.plot( q_mean(i,:));
@@ -179,15 +177,18 @@ for i=2:length(data.x)-2
     K=right.gravload(q(i-1,:))';
 
     %% CLF and CBF
+    % The last variable in the clf_cbf function determines if the
+    % controller runs both the cbf/clf or just the clf controller.
+    % Use 1 to simple use the clf, while 0 to use the clf/cbf controller.
 
     % QP for x dimension
-    mu1=clf(alphaE1,betaE1,Gam1,F,G,P,eps1,psc1,gamma1,p(i-1,1),dp(i-1,1),data,'x',i-1,'1');
+    mu1=clf_cbf(alphaE1,betaE1,Gam1,F,G,P,eps1,psc1,gamma1,p(i-1,1),dp(i-1,1),data,'x',i-1,'1');
     
     % QP for y dimension
-    mu2=clf(alphaE2,betaE2,Gam2,F,G,P,eps2,psc2,gamma2,p(i-1,2),dp(i-1,2),data,'y',i-1,'1');
+    mu2=clf_cbf(alphaE2,betaE2,Gam2,F,G,P,eps2,psc2,gamma2,p(i-1,2),dp(i-1,2),data,'y',i-1,'1');
 
     % QP for z dimension
-    mu3=clf(alphaE3,betaE3,Gam3,F,G,P,eps3,psc3,gamma3,p(i-1,3),dp(i-1,3),data,'z',i-1,'1');
+    mu3=clf_cbf(alphaE3,betaE3,Gam3,F,G,P,eps3,psc3,gamma3,p(i-1,3),dp(i-1,3),data,'z',i-1,'1');
     
     %% Feedback Linearization and Null space controller
     disp('---------------------')
@@ -201,10 +202,10 @@ for i=2:length(data.x)-2
     dJ=right.jacob_dot(q(i-1,:),dq(i-1,:));
     dJ=dJ(1:3);  % Cartesian derivative of the Jacobian
 
-    u_null=(eye(7,7)-transpose(J)*pinv(transpose(J)))*(Gain*(q_init(1,:)'-q(i-1,:)'));
-    u_null=[0;0;u_null(3);0;u_null(5);0;0;];
+    u_null=(eye(7,7)-transpose(J)*pinv(transpose(J)))*(Gain*(q_init(1,:)'-q(i-1,:)')); % Null space controller
+    u_null=[0;0;u_null(3);0;u_null(5);0;0;]; 
 
-    u = C+K+(M*pinv(J)*(-dJ+mu+[ddp(i,1); ddp(i,2); ddp(i,3)]))+u_null; % Summary of the CLF/CBF controller and the Jacobian
+    u = C+K+(M*pinv(J)*(-dJ+mu+[ddp(i,1); ddp(i,2); ddp(i,3)]))+u_null; % Sum the CLF/CBF controller and the Null space controller
 
     %% Simulating the robot dynamics
     state=[q(i-1,:),dq(i-1,:)];
@@ -234,26 +235,33 @@ fig1=figure(1);plot(data.x(:,1)); hold on; plot(data.x(:,1)+data.x(:,2)); plot(d
 fig2=figure(2); plot(data.y(:,1)); hold on; plot(data.y(:,1)+data.y(:,2)); plot(data.y(:,1)-data.y(:,3)); plot(p(1:i-1,2));
 fig3=figure(3); plot(data.z(:,1)); hold on; plot(data.z(:,1)+data.z(:,2)); plot(data.z(:,1)-data.z(:,3)); plot(p(1:i-1,3));
 
-saveas(fig1,'fig1.jpg');
-saveas(fig2,'fig2.jpg');
-saveas(fig3,'fig3.jpg');
+saveas(fig1,append("Data\",date,"\cartesian_results\fig1.jpg"));
+saveas(fig2,append("Data\",date,"\cartesian_results\fig2.jpg"));
+saveas(fig3,append("Data\",date,"\cartesian_results\fig3.jpg"));
 
 % Iterate through the joint configuration
-figure(4)
-ax = gca;
-exportgraphics(ax, gifFile);
+fig4=figure(4);
 
-right.plot( q(1,:));
+gifFile = append("Data\",date,"\cartesian_results\cartesian.gif");
+right.name='Baxter';
+right.plot(q(1,:),'view',[19,26],'workspace',[-1 1 -1 1 -1 1]);
 hold on
+plot3(data.x(:,1),data.y(:,1),data.z(:,1),'b')
+plot3(p(1:i-1,1),p(1:i-1,2),p(1:i-1,3),'r')
+exportgraphics(fig4, gifFile);
 
-plot3(data.x(:,1),data.y(:,1),data.z(:,1))
-plot3(p(1:i-1,1),p(1:i-1,2),p(1:i-1,3))
 vizStep = 2;
 for j = 2:vizStep:i
-    right.plot( q(j,:));
-    exportgraphics(ax, gifFile, Append=true);
+    right.plot( q(j,:),'view',[19,26],'workspace',[-1 1 -1 1 -1 1]);
+    exportgraphics(fig4, gifFile, Append=true);
 end
 hold off
+
+%% Store the result variables
+demo_id=strrep(date,'\','_');
+matname = append("Data\",date,"\cartesian_results\results.mat")
+save(matname,'q','p','data')
+
 
 function dx = baxter_dynamics(t, x, robot)
     
@@ -275,7 +283,7 @@ function dx = baxter_dynamics(t, x, robot)
 
 end
 
-function u =clf(alphaE,betaE,Gam,F,G,P,eps,psc, gamma,p,dp,data,dim,id,cnt_id)
+function u =clf_cbf(alphaE,betaE,Gam,F,G,P,eps,psc, gamma,p,dp,data,dim,id,cnt_id)
                 
     % CLF
     P_eps=[1/eps 0;0 1]*P*[1/eps 0;0 1];

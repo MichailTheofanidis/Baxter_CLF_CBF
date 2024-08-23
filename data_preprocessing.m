@@ -10,26 +10,38 @@ mdl_baxter
 
 %% Load data
 %date = "2_15_23";
-date = "5_3_23\Set_2";
-num_demo = 13;
+demos=[15, 16, 13];
+total_demo=0;
+
+for i=1:3
+
+date = append("5_3_23\Set_",num2str(i));
+num_demo = demos(i);
 desired_length=500;
 padding=0.01*desired_length;
-cmap = jet(num_demo);
 
-for i=1:num_demo
-    path = append("Data\",date,"\demos\demo",num2str(i),".txt");
-    data = readtable(path);
-    joint_data{i} = data{:,["time","right_s0","right_s1","right_e0","right_e1","right_w0","right_w1","right_w2"]};
-    legend_cell{i} = append('demo ',num2str(i));
-
-%     if i==12
-%         joint_data{i}=flip(joint_data{i});
-%     end
+    counter=1;
+    for j=j+1:j+num_demo
+        path = append("Data\",date,"\demos\demo",num2str(counter),".txt");
+        data = readtable(path);
+        joint_data{j} = data{:,["time","right_s0","right_s1","right_e0","right_e1","right_w0","right_w1","right_w2"]};
+        legend_cell{j} = append('demo ',num2str(i));
+        counter=counter+1;
     
+    %     if i==12
+    %         joint_data{i}=flip(joint_data{i});
+    %     end
+        
+    end
+
+    total_demo=total_demo+num_demo;
+
 end
 
+cmap = jet(total_demo);
+
 %% Resample data
-for i=1:num_demo
+for i=1:total_demo
 
     data=joint_data{i};
     interp_joint_positions=zeros(desired_length-2*padding,8);
@@ -55,7 +67,7 @@ for i=1:num_demo
 end
 
 %% Generate Cartesian Data
-for i=1:num_demo
+for i=1:total_demo
 
 %     rotation=zeros(length(interp_joint_data{i}(:,2:end)),3);
 % 
@@ -85,7 +97,7 @@ for j=1:7
 
     subplot(2, 4, j) 
     hold on
-    for i=1:num_demo
+    for i=1:total_demo
 
         joint = joint_data{i}(:,j+1);
         plot(joint,'Color',cmap(i,:))
@@ -105,7 +117,7 @@ for j=1:7
 
     subplot(2, 4, j) 
     hold on
-    for i=1:num_demo
+    for i=1:total_demo
 
         joint = interp_joint_data{i}(:,j+1);
         plot(joint,'Color',cmap(i,:))
@@ -122,7 +134,7 @@ figure(3)
 axis equal
 grid on
 hold on
-for i=1:num_demo
+for i=1:total_demo
     plot3(gripper_data{i}(:,1),gripper_data{i}(:,2),gripper_data{i}(:,3),'Color',cmap(i,:))
 end
 hold off
@@ -136,7 +148,7 @@ for j=1:3
 
     subplot(1, 3, j) 
     hold on
-    for i=1:num_demo
+    for i=1:total_demo
 
         gripper = gripper_data{i}(:,j);
         plot(gripper,'Color',cmap(i,:))
@@ -165,7 +177,12 @@ legend(legend_cell)
 % legend(legend_cell)
 
 %% Save the data
+%demo_id=strrep(date,'\','_')
+%matname = append("Data\",date,"\demo_",demo_id,".mat")
+
+date = append("5_3_23");
 matname = append("Data\",date,"\demo.mat");
+
 save(matname,'interp_joint_data','gripper_data','joint_data')
 
 
